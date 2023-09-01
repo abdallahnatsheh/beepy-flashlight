@@ -20,4 +20,4 @@ Before running the script, make sure you have the following:
 2. Run the script in the terminal with root privileges using `sudo`:
    `sudo python3 flashlight.py`
 
-	**Note:**  you can add it as alias to run the script with one command in .bashrc  with `alias 	flash="python3 /path/to/flashlight.py"`
+	**Note:**  you can add it as alias to run the script with one command in .bashrc  with `alias flash="python3 /path/to/flashlight.py"`
