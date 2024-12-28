@@ -1,108 +1,82 @@
 import RPi.GPIO as GPIO
-import datetime
-import os
 import time
+import os
 
+# GPIO pin for the button
 BUTTON_PIN = 17
 
-SHORT_PRESS_TIME = 0.5  # Less than 0.5 seconds
-REPEAT_TIMEOUT = 0.5  # Repeat short presses should be within 1s
-MEDIUM_PRESS_TIME = 2  # Less than 2.0 seconds
+# Constants for timing
+LONG_PRESS_DURATION = 2.0  # Time duration to detect a long press (2 seconds)
 
-SHORT_PRESS_COUNT = 0
-BUTTON_PRESS_TIME = 0
-BUTTON_RELEASE_TIME = 0
-LED_ON = False  # Use a boolean variable to track LED state
+# LED state
+led_on = False
 
-def my_callback(channel):
-    global BUTTON_PRESS_TIME
-    global SHORT_PRESS_COUNT
-    global BUTTON_RELEASE_TIME
-    global LED_ON  # Use the global variable to track LED state
+# Setup GPIO
+GPIO.setmode(GPIO.BCM)
+GPIO.setup(BUTTON_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 
-    now = time.time()
-    if GPIO.input(channel):
-        button_duration = now - BUTTON_PRESS_TIME
+# Function to handle a button press
+def handle_press(channel):
+    global button_held_start_time
 
-        if 0.01 <= button_duration < SHORT_PRESS_TIME:  # Short Press
-            SHORT_PRESS_COUNT += 1
+    if GPIO.input(channel):  # Button released
+        button_duration = time.time() - button_held_start_time
 
-            # Toggle the LED state on a short press
-            LED_ON = not LED_ON
-            if LED_ON:
-                set_white_led()
-            else:
-                turn_off_led()
+        if button_duration < LONG_PRESS_DURATION:  # Short press
+            print("Short press detected")
+            toggle_white_light()
+    else:  # Button pressed
+        button_held_start_time = time.time()
 
-        BUTTON_RELEASE_TIME = now
+# Function to toggle the white light
+def toggle_white_light():
+    global led_on
+    if led_on:
+        print("Turning off the white light")
+        turn_off_white_light()
     else:
-        BUTTON_PRESS_TIME = now
+        print("Turning on the white light")
+        turn_on_white_light()
 
-def handle_press():
-    global SHORT_PRESS_COUNT
-    global BUTTON_RELEASE_TIME
-    global BUTTON_PRESS_TIME
-    # Remove the LED_ON global variable since we're tracking it in my_callback now
-
-    now = time.time()
-
-    while not GPIO.input(BUTTON_PIN):  # Button is being held
-        now = time.time()
-        if SHORT_PRESS_COUNT >= 3:
-            turn_off_led()
-
-    if SHORT_PRESS_COUNT == 2:
-        with open('/sys/firmware/beepy/led_red', 'w') as red:
-            red.write("128")
-        with open('/sys/firmware/beepy/led_green', 'w') as green:
-            green.write("70")
-        with open('/sys/firmware/beepy/led_blue', 'w') as blue:
-            blue.write("0")
-        if now - BUTTON_RELEASE_TIME > REPEAT_TIMEOUT:
-            execute_script('short_press_2.sh')
-
-    if SHORT_PRESS_COUNT == 1:
-        with open('/sys/firmware/beepy/led_blue', 'w') as blue:
-            blue.write("128")
-        if now - BUTTON_RELEASE_TIME > REPEAT_TIMEOUT:
-            execute_script('short_press_1.sh')
-
-def set_white_led():
+# Function to turn on the white light
+def turn_on_white_light():
+    global led_on
     with open('/sys/firmware/beepy/led', 'w') as led:
-        led.write('1')
-    with open('/sys/firmware/beepy/led_red', 'w') as led:
-        led.write('255')
-    with open('/sys/firmware/beepy/led_green', 'w') as led:
-        led.write('255')
-    with open('/sys/firmware/beepy/led_blue', 'w') as led:
-        led.write('255')
-
-def turn_off_led():
+        led.write("0")  # Disable the LED
+    with open('/sys/firmware/beepy/led_red', 'w') as red:
+        red.write("255")  # Turn on red component
+    with open('/sys/firmware/beepy/led_green', 'w') as green:
+        green.write("255")  # Turn on green component
+    with open('/sys/firmware/beepy/led_blue', 'w') as blue:
+        blue.write("255")  # Turn on blue component
     with open('/sys/firmware/beepy/led', 'w') as led:
-        led.write('0')
+        led.write("1")  # Enable the LED
+    led_on = True
 
-def execute_script(script_name):
-    global SHORT_PRESS_COUNT
-    SHORT_PRESS_COUNT = 0
+# Function to turn off the white light
+def turn_off_white_light():
+    global led_on
+    with open('/sys/firmware/beepy/led', 'w') as led:
+        led.write("0")  # Disable the LED
+    with open('/sys/firmware/beepy/led_red', 'w') as red:
+        red.write("0")  # Turn off red component
+    with open('/sys/firmware/beepy/led_green', 'w') as green:
+        green.write("0")  # Turn off green component
+    with open('/sys/firmware/beepy/led_blue', 'w') as blue:
+        blue.write("0")  # Turn off blue component
+    led_on = False
 
-    script_path = os.path.join(os.path.expanduser('~/bin'), script_name)
-    if os.path.exists(script_path):
-        os.system(script_path)
-    else:
-        print(f'Create a script at {script_path} for this action')
+# Initialize variable
+button_held_start_time = 0
 
-    time.sleep(0.5)
-    # Don't turn off the LED here
+# Add event detection for the button press
+GPIO.add_event_detect(BUTTON_PIN, GPIO.BOTH, callback=handle_press, bouncetime=50)
 
 try:
-    GPIO.setmode(GPIO.BCM)
-    GPIO.setup(BUTTON_PIN, GPIO.IN, pull_up_down=GPIO.PUD_UP)
-    GPIO.add_event_detect(BUTTON_PIN, GPIO.BOTH, callback=my_callback, bouncetime=50)  # 50ms for de-bouncing
-
     while True:
-        handle_press()
+        time.sleep(1)  # Keep the script running
 
 except KeyboardInterrupt:
-    print("Goodbye!")
+    print("Exiting...")
 finally:
     GPIO.cleanup()
